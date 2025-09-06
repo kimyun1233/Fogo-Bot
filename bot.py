@@ -82,30 +82,22 @@ def send_raw_transaction(tx_bytes_b64):
 
 def check_balance(private_key: str):
     print_header("CURRENT BALANCES")
-    
     secret_bytes = base58.b58decode(private_key)
     wallet = Keypair.from_secret_key(secret_bytes)
     owner = wallet.public_key
-    
     print_info("Wallet Address", str(owner))
     print_separator()
-    
     fogo_balance = get_fogo_balance(str(owner))
     spl_fogo_balance = get_spl_fogo_balance(str(owner))
-    
     print_info("FOGO Balance", f"{fogo_balance/1e9:.9f} FOGO")
     print_info("SPL FOGO Balance", f"{spl_fogo_balance/1e9:.9f} SPL FOGO")
     print_separator()
 
-def auto_mode(private_key: str, amount: float, delay: int = 15):
-    """
-    Jalankan wrap -> unwrap terus menerus dengan cek saldo otomatis.
-    amount: jumlah FOGO/SPL FOGO per transaksi
-    delay: jeda antar transaksi (detik), default = 15 detik
-    """
+def auto_mode(private_key: str, amount: float, delay: int = 15, max_loops: int = 0):
     secret_bytes = base58.b58decode(private_key)
     wallet = Keypair.from_secret_key(secret_bytes)
     owner = wallet.public_key
+    loop_count = 0
 
     while True:
         try:
@@ -113,7 +105,7 @@ def auto_mode(private_key: str, amount: float, delay: int = 15):
             fogo_balance = get_fogo_balance(str(owner))
             spl_balance = get_spl_fogo_balance(str(owner))
             need_lamports = int(amount * 1e9)
- 
+
             if fogo_balance >= need_lamports:
                 print_header(f"[{now}] AUTO MODE: WRAP")
                 wrap_fogo(private_key, amount)
@@ -121,9 +113,8 @@ def auto_mode(private_key: str, amount: float, delay: int = 15):
                 print_warning(f"[{now}] Skipping WRAP, not enough FOGO balance.")
 
             time.sleep(delay)
-
             now = datetime.datetime.now().strftime("%H:%M:%S")
-            
+
             if spl_balance >= need_lamports:
                 print_header(f"[{now}] AUTO MODE: UNWRAP")
                 unwrap_fogo(private_key, amount)
@@ -131,6 +122,11 @@ def auto_mode(private_key: str, amount: float, delay: int = 15):
                 print_warning(f"[{now}] Skipping UNWRAP, not enough SPL FOGO balance.")
 
             time.sleep(delay)
+            loop_count += 1
+
+            if max_loops > 0 and loop_count >= max_loops:
+                print_success(f"Auto Mode finished after {loop_count} loops.")
+                break
 
         except KeyboardInterrupt:
             print("\n\nExiting Auto Mode...")
@@ -145,7 +141,7 @@ def show_menu():
     print("  1. Wrap FOGO to SPL FOGO")
     print("  2. Unwrap SPL FOGO to FOGO")
     print("  3. Check Balances")
-    print("  4. Exit")   
+    print("  4. Exit")
     print("  5. Auto Mode (Loop Wrap/Unwrap)")
     print_separator()
 
@@ -182,10 +178,11 @@ def main():
             elif choice == "5":
                 amount = float(input("\nEnter Amount per Transaction -> "))
                 delay = int(input("Enter Delay between Transactions (seconds, default 15) -> ") or 15)
+                max_loops = int(input("Enter Number of Loops (0 = infinite) -> ") or 0)
                 if amount <= 0 or delay <= 0:
                     print_error("Amount and delay must be greater than 0")
                     continue
-                auto_mode(private_key, amount, delay)
+                auto_mode(private_key, amount, delay, max_loops)
                 
             else:
                 print_error("Invalid choice! Please select 1-5")
